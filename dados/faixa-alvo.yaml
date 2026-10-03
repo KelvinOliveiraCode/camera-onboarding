@@ -1,0 +1,17 @@
+# Faixa alvo da descoberta.
+#
+# CONTEUDO FICTICIO. A descoberta so aceita RFC 1918 e localhost: qualquer
+# faixa fora disso e recusada antes de qualquer varredura, e e por isso que
+# este arquivo so pode conter faixa privada.
+#
+# As 24 cameras simuladas vivem em 192.168.30.0/24, nas portas 554 e 8554.
+# O scanner nao abre socket: ele consulta o registro simulado, que e o que
+# permite testar descoberta sem tocar em rede real.
+
+faixa: 192.168.30.0/24
+portas: [554, 8554]
+comunidade: LABCOMUNIDADE
+usuario_padrao: admin
+senha_padrao: FICTICIA
+vlan_cftv: 30
+ntp: 192.168.30.1
