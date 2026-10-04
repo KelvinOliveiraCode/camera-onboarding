@@ -37,16 +37,24 @@ jobs:
       - name: Prova de aceite
         run: python tools/verificar_aceite.py
 
+      # Duas coisas do runner do GitHub brigam com o passo abaixo, e as duas
+      # precisam ser neutralizadas:
+      # 1) no pwsh 7.4+, `PSNativeCommandUseErrorActionPreference` faz um
+      #    comando nativo com codigo != 0 virar erro terminante e abortar o
+      #    passo antes do `if` que confere o codigo;
+      # 2) o runner fecha o passo com `exit $LASTEXITCODE`, entao o codigo 1
+      #    esperado da CLI viraria o codigo do passo.
       - name: O lote processa sem duplicar e sinaliza falha
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           Copy-Item dados/inventario-inicial.csv ci-inv.csv -Force
           python -m onboarding executar --faixa dados/faixa-alvo.yaml --inventario ci-inv.csv --log exemplos/log-onboarding.md
           if ($LASTEXITCODE -eq 0) {
             Write-Error "havendo camera com falha, o CLI deveria sair com 1"
             exit 1
           }
-          Remove-Item ci-inv.csv -Force
-          Write-Output "ok: falha sinalizada com codigo diferente de zero"
+          Write-Output "ok: falha de camera sinalizada com codigo diferente de zero"
+          exit 0
 
       - name: O log esta atualizado
         run: |
