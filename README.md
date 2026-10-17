@@ -1,203 +1,116 @@
-<div align="center">
-
-<p>
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/tests-37%20passing-brightgreen?style=flat-square" alt="Tests">
-  <img src="https://img.shields.io/badge/coverage-83%25-yellowgreen-brightgreen?style=flat-square" alt="Coverage">
-  <img src="https://img.shields.io/badge/deps-PyYAML%20only-blue?style=flat-square" alt="Deps">
-  <img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square" alt="Windows">
-</p>
-
 # camera-onboarding
 
-**Prepara camera IP em lote, com nome padronizado, registro em inventario e log por camera.**
+<img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python">
+<img src="https://img.shields.io/badge/tests-37%20passing-brightgreen?style=flat-square" alt="Tests">
+<img src="https://img.shields.io/badge/coverage-83%25-yellowgreen?style=flat-square" alt="Coverage">
+<img src="https://img.shields.io/badge/deps-PyYAML%20only-blue?style=flat-square" alt="Deps">
+<img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="License">
+<img src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square" alt="Windows">
 
-</div>
+Prepara camera IP em lote, com nome padronizado, registro em inventario e log por camera.
 
----
+## Problema / Por que existe
 
-## PT-BR
+Onboarding em massa de camera IP e feito a mao, uma por uma, na interface web, sem registro do que foi aplicado e sem como repetir. O custo nao esta em configurar a camera, esta em nao poder provar depois o que cada uma recebeu. Uma camera com problema nao pode parar as outras 23.
 
-### O que e
+## O que faz
 
-Script que pega uma camera nova na rede, aplica VLAN de CFTV, NTP, senha e nome,
-e registra no inventario de forma idempotente. Camera com problema vira linha no
-relatorio e nao aborta o lote.
+Lê um CSV de inventario e um YAML de faixa-alvo. Para cada camera: valida o nome no padrao CLI-ANDAR-CAM-001, confere se o IP e RFC 1918 e esta dentro da faixa-alvo, aplica VLAN, NTP, usuario e troca a senha padrao, registra o resultado no CSV sem duplicar e grava um log em markdown com o estado e o motivo de cada falha. Falha individual vira linha no relatorio, nunca aborta o lote. Rodar duas vezes nao duplica entrada no inventario.
 
-### Por que foi feito
+## Stack
 
-Onboarding em massa e trabalho real de projeto: o tipo de tarefa que alguem
-executa no primeiro mes, camera por camera, na interface web, sem registro do
-que foi feito e sem como repetir. O custo nao esta em configurar a camera, esta
-em nao ter como provar depois o que foi aplicado em cada uma.
+- Python 3.10+
+- PyYAML>=6.0, a unica dependencia de execucao; so le o YAML da faixa-alvo
+- pytest, pytest-cov, dependencias de desenvolvimento
+- csv, ipaddress e statistics da biblioteca padrao; nenhum pacote sai do processo, a descoberta consulta um registro simulado em memoria
 
-### Como rodar
+## Como funciona
 
-```powershell
-# 1. Instalar
+O comando `executar` processa o inventario inteiro, camera por camera, em cinco passos.
+
+1. Lê a faixa-alvo do YAML (CIDR, NTP, senha padrao).
+2. Carrega o inventario CSV (cabecalho: nome, ip, andar, usuario, senha, vlan, ntp, estado).
+3. Para cada entrada, monta uma `Configuracao` (VLAN 30, NTP do YAML, usuario admin, senha derivada do nome) e chama o configurador.
+4. O configurador valida o nome (CLI-ANDAR-CAM-001), confere IP RFC 1918 e dentro da faixa, aplica VLAN, NTP, usuario e troca de senha. Nome ou IP invalido falha sem aplicar nada; falha de uma etapa para a sequencia e vira erro no resultado, nunca excecao.
+5. Registra no CSV por nome: atualiza se ja existe, nao duplica. Gera o log markdown com tabela, contagens e lista de falhas com motivo.
+
+O comando retorna 0 quando todas as cameras sao configuradas, 1 quando ha pelo menos uma falha e 2 quando ha erro de inventario.
+
+O padrao de nomenclatura e `CLI-ANDAR-CAM-001`, com cliente (2 a 6 letras maiúsculas), andar (2 a 10 letras maiúsculas), literal `CAM` e numero com tres digitos. O numero nunca e reutilizado: uma camera removida deixa o buraco, para que o historico de duas cameras nao se misture no mesmo identificador.
+
+## Como rodar
+
+Instale o ambiente na primeira vez, no Windows PowerShell.
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install -e .
 
-# 2. Validar
+Valide a instalacao rodando os testes.
+
 python -m pytest tests/ -v
 
-# 3. Executar
-python -m onboarding executar --faixa dados/faixa-alvo.yaml `
-    --inventario dados/inventario-inicial.csv --log exemplos/log-onboarding.md
-```
+Execute o lote da raiz do repositorio.
 
-Saida real (o comando termina com codigo 1 porque uma camera foi sinalizada e
-nao processada):
+python -m onboarding executar --faixa dados/faixa-alvo.yaml --inventario dados/inventario-inicial.csv --log exemplos/log-onboarding.md
 
-```
+O exemplo incluso produz esta saida. O codigo de saida e 1 porque uma camera foi sinalizada.
+
 cameras processadas: 24
 configuradas: 23  com falha: 1
 log gravado em exemplos/log-onboarding.md
-```
 
-A segunda execucao nao duplica nada. Isso esta no criterio de aceite, nao numa
-frase de README.
+A falha registrada e a camera CLI-SEGUNDO-CAM-013 (IP 10.99.99.99, fora da faixa-alvo 192.168.30.0/24); as outras 23 sao configuradas.
 
-Sem instalar nada, da raiz do repositorio:
+Rode direto do repositorio, sem instalar nada.
 
-```powershell
 $env:PYTHONPATH="$PWD\src"; python -m onboarding executar --faixa dados/faixa-alvo.yaml --inventario dados/inventario-inicial.csv --log exemplos/log-onboarding.md
-```
 
-### Nomenclatura: CLI-ANDAR-CAM-001
+Rodar duas vezes no mesmo inventario nao duplica nenhuma linha (ver tests/test_fluxo.py e tools/verificar_aceite.py).
 
-Cliente, andar, o literal `CAM` e o numero com tres digitos. Cada parte existe
-por um motivo operacional; numero nunca e reutilizado, porque buraco de camera
-removida continua buraco. Ver `docs/padrao-de-nomenclatura.md`.
+## Estrutura do projeto
 
-### Falhas individuais
+camera-onboarding/
+├── src/onboarding/
+│   ├── cli.py          ponto de entrada e comando executar
+│   ├── configurador.py VLAN, NTP, usuario e troca de senha (simulado)
+│   ├── inventario.py   registro idempotente em CSV por nome
+│   ├── descoberta.py   varredura simulada em faixa RFC 1918, sem socket
+│   ├── naming.py       padrao e validador CLI-ANDAR-CAM-001
+│   ├── relatorio.py    log em markdown com tabela e falhas
+│   └── __main__.py     permite python -m onboarding
+├── tests/              test_fluxo.py, test_naming.py (37 testes)
+├── dados/              faixa-alvo.yaml, inventario-inicial.csv (24 cameras simuladas)
+├── docs/               padrao-de-nomenclatura.md, onboarding-em-massa.md
+├── exemplos/           log-onboarding.md (saida de referencia)
+├── tools/              verificar_aceite.py, verificar_encoding.py, gerar_inventario.py
+├── pyproject.toml      build, scripts, pytest e cobertura
+├── requirements.txt    PyYAML e dependencias de desenvolvimento
+└── LICENSE             MIT
 
-Duas cameras tem problema de proposito: CAM-007 com senha padrao (corrigida no
-onboarding) e CAM-013 com IP fora da faixa (sinalizada, nao processada). Uma
-camera com problema nao para as outras 23.
+## Trade-offs e decisoes
 
-### O que aprendi
+- CSV como inventario: simples, auditavel e sem servidor de banco; concorrencia e historico ficam para um banco de verdade.
+- Simulacao sem rede: nenhuma varredura com socket, consulta registro em memoria. Permite testar sem tocar em producao, mas nao configura cameras IP reais.
+- Senha nova derivada do nome (`Nova` + tres ultimos caracteres do nome): prova que a troca acontece, longe de uma politica real de segredo.
+- Sem rollback: falha no meio deixa etapas aplicadas; nao ha desfazer.
+- Nome como chave unica do inventario: a idempotencia depende de uma chave estável; sem ela a segunda execucao cria uma linha nova em vez de atualizar a antiga.
+- IP fora da faixa-alvo e diferente de IP invalido RFC 1918: o configurador separa os dois casos e o relatorio diz qual falhou.
+- Codigo de saida 1 quando ha falhas: um lote com falha individual nao e um sucesso limpo.
 
-- **Idempotencia se exercita, nao se declara.** Rodar duas vezes e parte do
-  criterio de aceite: sem isso, "atualizar" vira "duplicar" silenciosamente.
-- **Registro e por nome.** Sem chave estavel no CSV, a segunda execucao cria
-  uma linha nova em vez de atualizar a antiga.
-- **Fora da faixa nao e fora da RFC.** Endereco privado e valido, mas nao e
-  deste projeto. O configurador separa as duas coisas, e o relatorio diz qual
-  das duas falhou.
-- **Motivo vazio e relatorio mudo.** A primeira versao sinalizava a falha sem
-  dizer por que; o adapter agora passa o motivo, e o log fica acionavel.
+## Limitações conhecidas
 
-### Limitacoes
+- Simulacao, nao rede: nenhum pacote sai do processo; a descoberta consulta um registro em memoria.
+- Senha "nova" derivada do nome: suficiente para provar que a troca acontece, longe de uma politica real de segredo.
+- Sem rollback: falha no meio deixa etapas aplicadas, sem desfazer.
+- Inventario e CSV: concorrencia e historico ficam para um banco de verdade.
+- Nao configura cameras IP reais: ambiente simulado e ficticio.
 
-- **Simulacao, nao rede.** Nenhum pacote sai do processo: a descoberta consulta
-  um registro em memoria.
-- **Senha "nova" e derivada do nome.** Suficiente para provar que a troca
-  acontece, longe de politica real de segredo.
-- **Sem rollback.** Falha no meio deixa etapas aplicadas e nao ha desfazer.
-- **Inventario e CSV.** Concorrencia e historico ficam para um banco de verdade.
-
-### Licenca
+## Licenca
 
 MIT. Ver [LICENSE](LICENSE).
 
----
+## Autor
 
-## EN
-
-### What it is
-
-A script that takes a new camera on the network, applies the CFTV VLAN, NTP,
-password and name, and registers it in the inventory, idempotently. A camera
-with a problem becomes a report line and never aborts the batch.
-
-### Why it was built
-
-Bulk onboarding is real project work: the kind of task someone does in their
-first month, one camera at a time, through the web interface, with no record of
-what was applied and no way to repeat it. The cost is not in configuring the
-camera; it is in having no way to prove afterwards what each one received.
-
-### How to run
-
-```powershell
-# 1. Install
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -e .
-
-# 2. Validate
-python -m pytest tests/ -v
-
-# 3. Run
-python -m onboarding executar --faixa dados/faixa-alvo.yaml `
-    --inventario dados/inventario-inicial.csv --log exemplos/log-onboarding.md
-```
-
-Real output (the command exits with code 1 because one camera was flagged and
-not processed):
-
-```
-cameras processadas: 24
-configuradas: 23  com falha: 1
-log gravado em exemplos/log-onboarding.md
-```
-
-The second run duplicates nothing, and that is covered by the acceptance check
-rather than promised here.
-
-Without installing anything, from the repository root:
-
-```powershell
-$env:PYTHONPATH="$PWD\src"; python -m onboarding executar --faixa dados/faixa-alvo.yaml --inventario dados/inventario-inicial.csv --log exemplos/log-onboarding.md
-```
-
-### Naming: CLI-ANDAR-CAM-001
-
-Client, floor, the literal `CAM` and a three-digit number. Every part exists
-for an operational reason, and a number is never reused: the hole left by a
-removed camera stays a hole. See `docs/padrao-de-nomenclatura.md`.
-
-### Individual failures
-
-Two cameras have a problem on purpose: CAM-007 with the factory password
-(fixed by the onboarding) and CAM-013 with an out-of-range IP (flagged, not
-processed). One camera with a problem does not stop the other 23.
-
-### What I learned
-
-- **Idempotency is exercised, not declared.** Running twice is part of the
-  acceptance check; without it, "update" silently becomes "duplicate".
-- **The record is keyed by name.** Without a stable key in the CSV, the second
-  run appends a row instead of updating the existing one.
-- **Out of range is not the same as out of RFC.** A private address is valid,
-  but it is not part of this project. The configurator separates the two cases
-  and the report says which one failed.
-- **An empty reason is a mute report.** The first version flagged the failure
-  without saying why; the adapter now passes the reason, so the log is
-  actionable.
-
-### Limitations
-
-- **Simulation, not network.** No packet leaves the process: discovery reads an
-  in-memory registry.
-- **The "new" password is derived from the name.** Enough to prove the rotation
-  happens, far from a real secret policy.
-- **No rollback.** A failure halfway leaves steps applied, with no undo.
-- **The inventory is a CSV.** Concurrency and history are left to a real
-  database.
-
-### License
-
-MIT. See [LICENSE](LICENSE).
-
----
-
-<div align="center">
-  <sub>Por <a href="https://github.com/KelvinOliveiraCode">Kelvin Oliveira</a> &middot;
-  <a href="https://kelvinoliveiracode.github.io/portfolio/">portfolio</a></sub>
-</div>
+Kelvin Oliveira - https://github.com/KelvinOliveiraCode - https://kelvinoliveiracode.github.io/portfolio/
