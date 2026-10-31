@@ -1,118 +1,103 @@
 # camera-onboarding
 
-<div align="center">
-
 **English** · [Português (Brasil)](README.md)
 
-</div>
-
-[![Python 3](https://img.shields.io/badge/Python-3.x-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/) [![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikit-learn)](https://scikit-learn.org/) [![pandas](https://img.shields.io/badge/pandas-150458?style=flat-square&logo=pandas)](https://pandas.pydata.org/) [![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest)](https://docs.pytest.org/) [![MIT License](https://img.shields.io/badge/License-MIT-f4c430?style=flat-square)](LICENSE)
-
-### Onboarding de camera IP em lote: descoberta, nomenclatura, idempotencia e log
-
----
+[![Python 3](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](#) [![PyYAML](https://img.shields.io/badge/PyYAML-only%20dep-3776AB?style=flat-square)](#) [![pytest](https://img.shields.io/badge/pytest-37%20tests-0A9EDC?style=flat-square&logo=pytest)](#) [![MIT License](https://img.shields.io/badge/License-MIT-f4c430?style=flat-square)](LICENSE)
 
 ## What it is
 
-Onboarding de camera IP em lote: descoberta, nomenclatura, idempotencia e log
+**Batch onboarding of IP cameras**: it discovers cameras on a local range (a simulated registry, no sockets), applies a **naming standard** (`CAM`), **configures** each device (VLAN, NTP, user and password rotation, validating RFC 1918 addresses) in an **idempotent** way and produces a **Markdown report** of the batch. It is an educational infrastructure/network-automation lab.
 
----
+## Status
 
-## Quick Start
+An educational lab, working and tested (37 tests).
 
-```bash
-# Clone and enter
-git clone https://github.com/KelvinOliveiraCode/<repo>.git
-cd <repo>
+## Features
 
-# Install dependencies
-# No requirements.txt detected
+- **Discovery** (`descoberta.py`): scans a local range via `REGISTRO_SIMULADO` (no sockets), validates CIDR (`faixa_valida`).
+- **Naming** (`naming.py`): `CLI-<FLOOR>-CAM-NNN` pattern, with validation and next-number logic.
+- **Configurator** (`configurador.py`): applies VLAN, NTP, sets the user and rotates the password on a simulated camera; validates RFC 1918 IPs.
+- **Inventory** (`inventario.py`): reads a CSV with header `nome,ip,andar,usuario,senha,vlan,ntp,estado`.
+- **Report** (`relatorio.py`): Markdown log with each camera's state.
+- **CLI**: `onboarding executar --faixa <yaml> --inventario <csv> --log <md>`.
 
-# Run the project
-python main.py
+## Architecture
 
-# Run tests
-pytest
+An `onboarding` package with `descoberta`, `naming`, `configurador`, `inventario` and `relatorio`, orchestrated by the CLI. The configuration is **simulated** (no real device is touched).
+
+```mermaid
+flowchart LR
+    RANGE[faixa-alvo.yaml] --> DISC[discovery - scan registry]
+    DISC --> NAM[naming - CLIENTE-FLOOR-CAM-NNN]
+    NAM --> CONF[configurator - VLAN/NTP/user/password]
+    CONF --> INV[inventory CSV]
+    CONF --> REP[report - Markdown]
+    CLI[onboarding executar] --> DISC
 ```
 
-## How it works
+## Stack
 
-Estrutura limpa e modular com separação de responsabilidades.
+- Python ≥ 3.10
+- PyYAML ≥ 6.0 (only dependency)
+- pytest (dev)
 
----
+## Repository layout
 
-## Capabilities
+```
+camera-onboarding/
+├── pyproject.toml · BRIEF.md
+├── src/onboarding/
+│   ├── descoberta.py · naming.py · configurador.py
+│   ├── inventario.py · relatorio.py · cli.py
+├── dados/
+│   ├── faixa-alvo.yaml
+│   └── inventario-inicial.csv   # contains fictitious user/password (FICTICIA)
+├── docs/             # mass onboarding, naming standard
+├── tests/            # 37 tests
+└── LICENSE           # MIT
+```
 
-| Capacidade | Descrição |
-|------------|-------------|
-| Carregamento de Dados | Auto-download do TensorFlow creditcard.csv (284k transações) com cache local |
-| EDA e Visualização | Distribuição de classes, histogramas de Amount, heatmaps de correlação (matplotlib/seaborn) |
-| Pré-processamento | RobustScaler em Amount/Time, split estratificado, remoção de duplicatas |
-| Balanceamento | SMOTE oversampling (fallback: class_weight="balanced") |
-| Modelagem | LogisticRegression, RandomForest, ExtraTrees com RandomizedSearchCV (StratifiedKFold) |
-| Métricas | Accuracy, Precision, Recall, F1, ROC AUC, Specificity, Confusion Matrix |
-| Seleção | Score ponderado: Recall 40% + F1 30% + Precision 20% + Accuracy 10% |
-| Persistência | Serialização joblib para modelo, scaler e resultados completos |
+## Prerequisites and installation
 
+Python ≥ 3.10.
 
----
+```bash
+pip install -e .
+```
 
+## How to run
 
+```bash
+onboarding executar --faixa dados/faixa-alvo.yaml --inventario dados/inventario-inicial.csv --log relatorio.md
+```
 
----
+## Tests and quality
 
-## FAQ
+Real command (verified by the agent):
 
-<details>
-<summary><strong>What is this project?</strong></summary>
+```bash
+PYTHONPATH=src python -m pytest tests/
+# 37 passed
+```
 
-A Python study/project demonstrating core concepts.
+## Technical decisions and trade-offs
 
-</details>
+- **Socket-free simulation**: runs safely in any environment; in exchange, it does not perform real discovery/onboarding.
+- **RFC 1918 validation** and naming standard: good practices avoid batch failures.
+- **Idempotency**: reprocessing does not reconfigure twice.
 
-<details>
-<summary><strong>How do I run it?</strong></summary>
+## Known limitations and roadmap
 
-See [Quick Start](#quick-start) for copy-paste commands.
+- Discovery and configuration are simulated (no real camera actions).
+- The sample inventory has **fictitious** user/password (`FICTICIA`) — replace with real credentials with care when adapting.
+- Real application would require camera-protocol integration (e.g. ONVIF) and secure credential management.
 
-</details>
+## Development process
 
-<details>
-<summary><strong>Are there tests?</strong></summary>
+An individual project by Kelvin Oliveira, built with orchestrated AI agents and reviewed by the author. The onboarding flow and the review are the author's.
 
-No automated tests in this repository.
+## License and author
 
-</details>
+MIT — Copyright (c) 2026 Kelvin Rebelo de Oliveira.
 
-<details>
-<summary><strong>Can I use this in production?</strong></summary>
-
-This is a **study/portfolio project**. Review and harden (auth, persistence, monitoring, etc.) before production use.
-
-</details>
-
-
-
----
-
-## Documentation
-
-- **Source Code** ,  Browse the `src/` directory for implementation details
-- **API Reference** ,  Inline docstrings + type hints
-- **Architecture Diagram** ,  See [architecture.mermaid](docs/architecture.mermaid) (if present)
-- **Changelog** ,  [CHANGELOG.md](CHANGELOG.md) (if present)
-- **Contributing** ,  [CONTRIBUTING.md](CONTRIBUTING.md) (if present)
-
-## License
-
-[MIT](LICENSE) ,  Kelvin Oliveira
-
----
-
-<div align="center">
-
-**Built with** · Python 3 + scikit-learn + pandas
-
-**Author** · [Kelvin Oliveira](https://github.com/KelvinOliveiraCode) · [Portfolio](https://kelvinoliveiracode.github.io/portfolio/)
-
-</div>
+**Author**: [Kelvin Oliveira](https://github.com/KelvinOliveiraCode) · [Portfolio](https://kelvinoliveiracode.github.io/portfolio/)
